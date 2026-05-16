@@ -1,0 +1,32 @@
+# fly.io configuration for self-hosted (unmanaged) PostgreSQL
+# App name: change 'umami-db' to your preferred name
+#
+# Initial setup (run once):
+#   fly apps create umami-db
+#   fly volumes create umami_pgdata --region fra --size 3 --app umami-db
+#   fly secrets set POSTGRES_PASSWORD=<your-secure-password> --app umami-db
+#   fly deploy --config fly.postgres.toml
+#
+# Then set the DATABASE_URL on the main app:
+#   fly secrets set DATABASE_URL="postgresql://umami:<your-secure-password>@umami-db.internal:5432/umami" \
+#     --app umami-falling-waterfall-1667
+
+app = 'umami-db'
+primary_region = 'fra'
+
+[build]
+  image = 'postgres:17-alpine'
+
+[env]
+  POSTGRES_DB       = 'umami'
+  POSTGRES_USER     = 'umami'
+  PGDATA            = '/data/pgdata'
+
+[[mounts]]
+  source      = 'umami_pgdata'
+  destination = '/data'
+
+[[vm]]
+  memory   = '256mb'
+  cpu_kind = 'shared'
+  cpus     = 1
