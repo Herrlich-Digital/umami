@@ -11,7 +11,7 @@
 #        --app umami-falling-waterfall-1667-db
 #   4. fly deploy --config fly.postgres.toml --app umami-falling-waterfall-1667-db
 #   5. fly secrets set \
-#        DATABASE_URL="postgresql://umami:<your-secret>@umami-falling-waterfall-1667-db.flycast:5432/umami" \
+#        DATABASE_URL="postgresql://umami:<your-secret>@umami-falling-waterfall-1667-db.internal:5432/umami" \
 #        --app umami-falling-waterfall-1667
 #
 # Data migration from managed Fly Postgres:
@@ -35,11 +35,17 @@ primary_region = 'fra'
   cpu_kind = 'shared'
   cpus = 1
 
-# No [services] or [http_service] block — the DB is reachable exclusively via
-# Fly's private 6PN network at umami-falling-waterfall-1667-db.flycast:5432
-# (or the .internal hostname). No public port is exposed.
-# Keep the machine always running (default) so the main app never faces a
-# cold-start connection failure. At 256 MB shared-cpu-1x: ~$1.94/month.
+# TCP service on port 5432 for Fly private network access via .flycast.
+# No public port is exposed — internal_port maps only within the 6PN.
+# Keep the machine always running so the main app never faces cold-start
+# connection failures. At 256 MB shared-cpu-1x: ~$1.94/month.
+
+[[services]]
+  protocol = 'tcp'
+  internal_port = 5432
+
+  [[services.ports]]
+    port = 5432
 
 [[mounts]]
   source = 'umami_pgdata'
