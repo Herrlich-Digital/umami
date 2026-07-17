@@ -1,9 +1,12 @@
 packages:
   - '**'
+  - '!dist'
+  - '!**/dist/**'
 allowBuilds:
-  '@prisma/client': true
+  '@parcel/watcher': false
   '@prisma/engines': true
-  prisma: true
-  cypress: false
+  '@swc/core': false
   esbuild: false
+  msw: false
+  prisma: true
   sharp: false
