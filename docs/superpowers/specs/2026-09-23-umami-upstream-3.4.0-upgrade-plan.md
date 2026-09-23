@@ -89,28 +89,56 @@ hatch even after the migrations run — a meaningfully lower-risk profile than
 the `v3.2.0` plan had to account for. Still take a fresh manual backup
 immediately before deploying regardless (see "Still needed").
 
+## Backup strategy — decided 23.09.2026: local pg_dump, not S3/Tigris
+
+The `fly.backup.toml` / `docker/backup/backup.sh` S3-cron setup from
+17.07.2026 was never actually deployed (`fly apps list` after logging in
+confirmed only `umami-falling-waterfall-1667` and `-db` exist, no
+`-backup` app). Rather than set up recurring off-site backups (would need a
+new AWS account + IAM user, or a Fly Tigris bucket) for what is a one-time
+pre-deploy safety net, Christoph chose the simpler option: a single manual
+`pg_dump` taken right before the deploy, stored locally.
+
+Done on 23.09.2026:
+```
+fly proxy 5433:5432 -a umami-falling-waterfall-1667-db &
+PGPASSWORD=<from `fly ssh console -a umami-falling-waterfall-1667 -C "printenv DATABASE_URL"`> \
+  pg_dump -h localhost -p 5433 -U umami -d umami --no-owner --no-acl --format=plain \
+  | gzip -9 > backups/backup-pre-v3.4.0-upgrade-<timestamp>.sql.gz
+```
+Result: `backups/backup-pre-v3.4.0-upgrade-2026-09-23T11-07-02Z.sql.gz` (5.8MB,
+14 tables, gzip-verified). `backups/` is gitignored (commit `a70b45696` on
+`master`) — never commit a raw DB dump.
+
+**Restore procedure, if the deploy needs to be rolled back to data:**
+```
+fly proxy 5433:5432 -a umami-falling-waterfall-1667-db &
+gunzip -c backups/backup-pre-v3.4.0-upgrade-<timestamp>.sql.gz \
+  | PGPASSWORD=<same password> psql -h localhost -p 5433 -U umami -d umami
+```
+This only matters for scenario B in the rollback decision tree below (a
+migration actually changed data in an incompatible way) — given the "no
+DROP/RENAME" finding above, this branch shouldn't trigger, but the backup
+exists in case something unexpected happens anyway.
+
+**Not set up, and intentionally deferred:** recurring automated backups
+(S3/Tigris cron). If this deploy goes well and the fork stays on a
+current-ish version going forward, revisit whether a recurring backup is
+worth the setup cost — for now, a fresh manual `pg_dump` before each future
+upgrade is the accepted tradeoff.
+
 ## Still needed before this can go to production (needs Christoph)
 
-1. **Fly authentication.** `fly auth login` — this session has no Fly access
-   token, so it could not check whether the `umami-falling-waterfall-1667-backup`
-   app (the daily S3 `pg_dump` cron, added in commit `65a9504a`) was ever
-   actually deployed, nor take a fresh manual backup, nor deploy anything.
-   Confirm the backup app is running (`fly status -a umami-falling-waterfall-1667-backup`)
-   before anything else — if it was never deployed, `fly deploy --config
-   fly.backup.toml --app umami-falling-waterfall-1667-backup` first.
-2. **Review [PR #6](https://github.com/Herrlich-Digital/umami/pull/6)** —
+1. **Review [PR #6](https://github.com/Herrlich-Digital/umami/pull/6)** —
    the actual diff, not just this doc.
-3. **Take a fresh manual backup** right before deploying, per the 17.07.2026
-   runbook's pre-deploy checklist (still valid, just re-target the app name
-   if it changed).
-4. **Deploy**: `git checkout master && git merge --no-ff upgrade/umami-3.4.0
+2. **Deploy**: `git checkout master && git merge --no-ff upgrade/umami-3.4.0
    && git push && fly deploy -a umami-falling-waterfall-1667`, then watch logs
    per the runbook's "Monitor immediately after" section.
-5. **After deploy**: re-verify the original bug is actually fixed — query
+3. **After deploy**: re-verify the original bug is actually fixed — query
    `get_event_data_values` for two Sharry events that share a property name
    (e.g. `webrtc-connected` vs. `webrtc-connection-failed`, property
    `stun_reachable`) and confirm the two calls now return different numbers.
-6. **Optional follow-up, not part of this PR**: evaluate switching the Umami
+4. **Optional follow-up, not part of this PR**: evaluate switching the Umami
    MCP config from `@mikusnuz/umami-mcp` (third-party) to upstream's own
    `@umami/mcp` package now that it's available — separate task, no code
    change needed in this repo, just an MCP server config change wherever
