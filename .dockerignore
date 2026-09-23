@@ -1,4 +1,6 @@
 .git
+.claude
+backups
 .next
 coverage
 geo
