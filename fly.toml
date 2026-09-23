@@ -11,6 +11,7 @@ primary_region = 'fra'
 [env]
   PORT = "3000"
   HOSTNAME = "0.0.0.0"
+  MCP_ENABLED = "1"
 
 [deploy]
   release_command = 'pnpm exec prisma migrate deploy'
