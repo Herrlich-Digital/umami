@@ -143,3 +143,28 @@ upgrade is the accepted tradeoff.
    `@umami/mcp` package now that it's available — separate task, no code
    change needed in this repo, just an MCP server config change wherever
    Christoph's Umami MCP is registered.
+
+## Outcome (23.09.2026, deployed)
+
+Deployed successfully as Fly release **v18**, after one failed attempt (v17):
+
+- **v17 failed**: `release_command = 'npx prisma migrate deploy'` crashed with
+  `Cannot find module '/app/npx'` — the v3.4.0 Dockerfile removes npm/npx from
+  the final runtime image (security hardening), but `fly.toml`'s
+  `release_command` still referenced it. Fly's release_command isolation
+  worked exactly as designed: the old `v16` app machine kept serving traffic
+  throughout, no data touched, no downtime. Fixed by changing it to
+  `pnpm exec prisma migrate deploy` (commit `3e39b5c24`), matching how the
+  rest of the codebase (`scripts/check-db.js`) already invokes Prisma.
+- **v18 succeeded**: all 26 migrations applied cleanly (log: "26 migrations
+  found in prisma/migrations" → "No pending migrations to apply" → "Database
+  is up to date"), app started, HTTP 200.
+- **Original bug verified fixed** via live MCP query — `get_event_data_values`
+  for `webrtc-connected` vs. `webrtc-connection-failed` (property
+  `stun_reachable`) on Sharry now returns two genuinely different results
+  (872/45 vs. 262/24) instead of the same site-wide aggregate for both.
+- Backup (`backups/backup-pre-v3.4.0-upgrade-2026-09-23T11-07-02Z.sql.gz`) was
+  not needed — no rollback required.
+- Side fix: `.claude/` (842MB of worktrees) and `backups/` were not in
+  `.dockerignore`, bloating every build's upload context — added
+  (commit `66fcdc4d5`).
