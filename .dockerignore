@@ -5,7 +5,6 @@ backups
 coverage
 geo
 docker-compose.yml
-Dockerfile
 .DS_Store
 **/node_modules
 .idea
