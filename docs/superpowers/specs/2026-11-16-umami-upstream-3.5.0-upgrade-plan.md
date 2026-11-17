@@ -68,9 +68,19 @@ In 3.4.0 the effective secret is `APP_SECRET || DATABASE_URL`.
      APP_SECRET="$(fly ssh console -a umami-falling-waterfall-1667 -C 'printenv DATABASE_URL')"
    fly secrets list -a umami-falling-waterfall-1667     # check it is there (staged)
    ```
-3. **Merge the PR into `master`** → GitHub Action `fly-deploy.yml` deploys.
+3. **Deploy manually from GLaDOS.** The GitHub Action `fly-deploy.yml` does
+   *not* deploy: every run since 23.09. fails with `no access token available`
+   (repo secret `FLY_API_TOKEN` is not set), and the 3.4.0 deploy was done by
+   hand too. So merging the PR alone changes nothing in production:
+   ```
+   git checkout master && git pull
+   fly deploy -a umami-falling-waterfall-1667
+   ```
    Migration 27 runs in the release machine; if it fails, the old release
    keeps serving (same as v17 on 23.09.).
+   Also check with `fly config show -a umami-falling-waterfall-1667` or the
+   release list whether `MCP_ENABLED=1` (commit `bb7cdc5`, pushed after the
+   v18 deploy) was ever deployed; this deploy will bring it either way.
 4. **Check right after the deploy:**
    - `fly logs -a umami-falling-waterfall-1667`: "27 migrations found",
      no `APP_SECRET must be set` error.
@@ -82,6 +92,10 @@ In 3.4.0 the effective secret is `APP_SECRET || DATABASE_URL`.
    `fly deploy -a umami-falling-waterfall-1667 --image <image of the previous release>`.
    Migration 27 only adds tables, 3.4.0 ignores them. DB restore from the backup
    only if something unexpected happens.
+
+## CI note
+
+`Gitleaks` runs on an upstream-only Blacksmith runner (`blacksmith-4vcpu-ubuntu-2404`), queues for 24 h and is cancelled on every push in this fork, `master` included. `Node.js CI` is skipped outside upstream. Neither says anything about this PR.
 
 ## Validation (16.11.2026, cloud session, no production access)
 
